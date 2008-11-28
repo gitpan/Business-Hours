@@ -7,7 +7,7 @@ require 5.006;
 use Set::IntSpan;
 use Time::Local qw/timelocal_nocheck/;
 
-our $VERSION = 0.08;
+our $VERSION = 0.09;
 
 =head1 NAME
 
@@ -32,7 +32,7 @@ calculate the number of business hours between arbitrary dates.
 
 =cut
 
-# Default business hours are weekdays from 9 am to 6pm
+# Default business hours are weekdays from 9am to 6pm
 our $BUSINESS_HOURS = (
     {   0 => {
             Name  => 'Sunday',
@@ -114,15 +114,56 @@ there are no valid hours on that day.
 
 Note that the ending time is really "what is the first minute we're closed.
 If you specifiy an "End" of 18:00, that means that at 6pm, you are closed.
-The last business second was 17:59:59. 
+The last business second was 17:59:59.
+
+As well, you can pass information about holidays using key 'holidays' and
+an array reference value, for example:
+
+    $hours->business_hours(
+        0 => { Name     => 'Sunday',
+               Start    => 'HH:MM',
+               End      => 'HH:MM' },
+        ....
+        6 => { Name     => 'Saturday',
+               Start    => 'HH:MM',
+               End      => 'HH:MM' },
+
+        holidays => [qw(01-01 12-25 2009-05-08)],
+    );
+
+Read more about holidays specification below in L</"holidays ARRAY"|holidays>.
 
 =cut
 
 sub business_hours {
     my $self = shift;
-    %{ $self->{'business_hours'} } = (@_)
-        if @_;
+    if ( @_ ) {
+        %{ $self->{'business_hours'} } = (@_);
+        $self->{'holidays'} = delete $self->{'business_hours'}{'holidays'};
+    }
     return %{ $self->{'business_hours'} };
+}
+
+=head2 holidays ARRAY
+
+Gets / sets holidays for this object. Takes an array
+where each element is ether 'MM-DD' or 'YYYY-MM-DD'.
+
+Specification with year defined may be required when a holiday
+matches Sunday or Saturday. In many countries days are shifted
+in such case.
+
+Holidays can be set via L</"business_hours HASH"|business_hours> method
+as well, so you can use this feature without changing your code.
+
+=cut
+
+sub holidays {
+    my $self = shift;
+    if ( @_ ) {
+        @{ $self->{'holidays'} } = (@_);
+    }
+    return @{ $self->{'holidays'} || [] };
 }
 
 =head2 for_timespan HASH
@@ -256,7 +297,30 @@ sub for_timespan {
     # hours intspan. (Because we want to trim any business hours that fall
     # outside the business period)
 
-    # TODO: Remove any holidays from the business hours
+    if ( my @holidays = $self->holidays ) {
+        my $start_year = $year;
+        my $end_year = (localtime $args{'End'})[5];
+        foreach my $holiday (@holidays) {
+            my ($year, $month, $date) = ($holiday =~ /^(?:(\d\d\d\d)\D)?(\d\d)\D(\d\d)$/);
+            $month--;
+            my @range;
+            if ( $year ) {
+                push @range, [
+                    timelocal_nocheck( 0, 0, 0, $date, $month, $year ),
+                ];
+            }
+            else {
+                push @range, [
+                    timelocal_nocheck( 0, 0, 0, $date, $month, $start_year ),
+                ];
+                push @range, [
+                    timelocal_nocheck( 0, 0, 0, $date, $month, $end_year ),
+                ] if $start_year != $end_year;
+            }
+            $_->[1] = $_->[0] + 24*60*60 foreach @range;
+            $business_hours_in_period -= \@range;
+        }
+    }
 
     # TODO: Add any special times to the business hours
 
