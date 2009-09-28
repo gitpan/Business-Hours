@@ -1,11 +1,11 @@
 --- #YAML:1.0
 name:                Business-Hours
-version:             0.09
+version:             0.09_02
 abstract:            
 license:             ~
 author:              
     - Jesse Vincent (jesse@cpan.org)
-generated_by:        ExtUtils::MakeMaker version 6.44
+generated_by:        ExtUtils::MakeMaker version 6.42
 distribution_type:   module
 requires:     
     Set::IntSpan:                  1.12
